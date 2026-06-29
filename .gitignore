@@ -1,0 +1,20 @@
+# Environment & secrets
+.env
+venv/
+
+# Claude Code
+CLAUDE.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Data (10-K filings are large HTML files — no need to version control them)
+data/
+
+# Chroma vector store (persisted to disk, rebuilt from data)
+chroma_db/
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,0 +1,11 @@
+langchain
+langchain-openai
+langchain-chroma
+chromadb
+openai
+ragas
+requests
+beautifulsoup4
+lxml
+tiktoken
+python-dotenv
