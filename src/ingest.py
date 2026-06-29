@@ -1,3 +1,6 @@
+#this file is used to download the 10-K filings for the companies listed in the COMPANIES dictionary.
+#  It uses the SEC EDGAR API to get the latest 10-K filing for each company, downloads the HTML content, and saves it as a text file in the data directory.
+
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -18,7 +21,8 @@ COMPANIES = {
     "JNJ":  {"name": "Johnson & Johnson", "cik": "200406"},
 }
 
-
+#this function takes CIK as input and return the url of the latest 10-K filing for that company. 
+# It uses the SEC EDGAR API to get the latest filings for the company and then searches for the 10-K filing in the list of recent filings.
 def get_10k_url(cik: str) -> str:
     padded_cik = cik.zfill(10)
     url = f"https://data.sec.gov/submissions/CIK{padded_cik}.json"
