@@ -21,9 +21,17 @@ COMPANIES = {
     "JNJ":  {"name": "Johnson & Johnson", "cik": "200406"},
 }
 
-#this function takes CIK as input and return the url of the latest 10-K filing for that company. 
-# It uses the SEC EDGAR API to get the latest filings for the company and then searches for the 10-K filing in the list of recent filings.
-def get_10k_url(cik: str) -> str:
+# The dissertation is scoped to FY2023 filings. We match on the report period
+# (not the filing date) so the correct fiscal year is selected regardless of
+# each company's fiscal year-end month (e.g. Apple ends in September, Microsoft
+# in June, the rest in December).
+FISCAL_YEAR = "2023"
+
+#this function takes CIK as input and returns the url of the FY2023 10-K filing
+# for that company. It uses the SEC EDGAR API to get the recent filings and
+# selects the 10-K whose report period falls in the target fiscal year, rather
+# than blindly taking the most recent 10-K (which would be a later fiscal year).
+def get_10k_url(cik: str, fiscal_year: str = FISCAL_YEAR) -> str:
     padded_cik = cik.zfill(10)
     url = f"https://data.sec.gov/submissions/CIK{padded_cik}.json"
 
@@ -33,7 +41,10 @@ def get_10k_url(cik: str) -> str:
 
     filings = data["filings"]["recent"]
     for i, form in enumerate(filings["form"]):
-        if form == "10-K":
+        # reportDate is the period the filing covers, e.g. "2023-09-30" for
+        # Apple's FY2023 10-K. Match its year to pick the right fiscal year.
+        report_date = filings["reportDate"][i]
+        if form == "10-K" and report_date.startswith(fiscal_year):
             accession = filings["accessionNumber"][i]
             primary_doc = filings["primaryDocument"][i]
             accession_clean = accession.replace("-", "")
@@ -42,7 +53,7 @@ def get_10k_url(cik: str) -> str:
                 f"{cik}/{accession_clean}/{primary_doc}"
             )
 
-    raise ValueError(f"No 10-K filing found for CIK {cik}")
+    raise ValueError(f"No FY{fiscal_year} 10-K filing found for CIK {cik}")
 
 
 def download_and_parse(url: str) -> str:
