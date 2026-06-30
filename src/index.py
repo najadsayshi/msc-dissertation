@@ -41,6 +41,10 @@ def index_documents(docs: list[Document]) -> None:
         embedding=embeddings,
         persist_directory=CHROMA_DIR,
         collection_name=COLLECTION_NAME,
+        # Retrieve by cosine similarity (matches the methodology). Chroma defaults
+        # to L2; for unit-normalised OpenAI embeddings the ranking is identical,
+        # but we set this explicitly so the code matches the stated design.
+        collection_metadata={"hnsw:space": "cosine"},
     )
 
 
