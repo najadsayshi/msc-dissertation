@@ -5,6 +5,9 @@ venv/
 # Claude Code
 CLAUDE.md
 
+# Learning/working notes (not part of the final deliverable)
+implementation.md
+
 # Python
 __pycache__/
 *.pyc
