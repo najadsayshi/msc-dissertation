@@ -1,11 +1,19 @@
-langchain
-langchain-openai
-langchain-chroma
-chromadb
-openai
-ragas
-requests
-beautifulsoup4
-lxml
-tiktoken
-python-dotenv
+# Pinned for reproducibility. This exact set is required because RAGAS (our
+# primary evaluation metric) does not yet support the langchain 1.x line — the
+# newest langchain-community deletes a module RAGAS still imports. The RAGAS
+# 0.2.x line below is the mature, documented API matching our four metrics.
+# See implementation.md §9 for the full reasoning.
+ragas==0.2.15
+langchain==0.3.27
+langchain-core==0.3.79
+langchain-community==0.3.31
+langchain-openai==0.3.35
+langchain-chroma==0.1.4
+langchain-text-splitters==0.3.11
+chromadb==0.5.23
+openai==2.44.0
+requests==2.34.2
+beautifulsoup4==4.15.0
+lxml==6.1.1
+tiktoken==0.13.0
+python-dotenv==1.2.2

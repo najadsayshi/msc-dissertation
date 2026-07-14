@@ -1,5 +1,4 @@
-#this file is used to download the 10-K filings for the companies listed in the COMPANIES dictionary.
-#  It uses the SEC EDGAR API to get the latest 10-K filing for each company, downloads the HTML content, and saves it as a text file in the data directory.
+# ingest.py - download a 10-K from SEC EDGAR, save it as plain text in data/
 
 import os
 import requests
@@ -8,11 +7,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# SEC EDGAR blocks requests without a descriptive User-Agent header
+# SEC blocks anonymous requests - has to say who's asking
 HEADERS = {
     "User-Agent": "Najad Marathumpalli mrnajadas@gmail.com"
 }
 
+# the five companies + their SEC CIK numbers
 COMPANIES = {
     "AAPL": {"name": "Apple",             "cik": "320193"},
     "MSFT": {"name": "Microsoft",         "cik": "789019"},
@@ -21,16 +21,13 @@ COMPANIES = {
     "JNJ":  {"name": "Johnson & Johnson", "cik": "200406"},
 }
 
-# The dissertation is scoped to FY2023 filings. We match on the report period
-# (not the filing date) so the correct fiscal year is selected regardless of
-# each company's fiscal year-end month (e.g. Apple ends in September, Microsoft
-# in June, the rest in December).
+# match on the period the filing covers, not the filing date - fiscal years
+# end in different months (Apple: September, Microsoft: June)
 FISCAL_YEAR = "2023"
 
-#this function takes CIK as input and returns the url of the FY2023 10-K filing
-# for that company. It uses the SEC EDGAR API to get the recent filings and
-# selects the 10-K whose report period falls in the target fiscal year, rather
-# than blindly taking the most recent 10-K (which would be a later fiscal year).
+
+# Find the URL of the FY2023 10-K. Can't just take the newest 10-K,
+# that could be a different fiscal year.
 def get_10k_url(cik: str, fiscal_year: str = FISCAL_YEAR) -> str:
     padded_cik = cik.zfill(10)
     url = f"https://data.sec.gov/submissions/CIK{padded_cik}.json"
@@ -41,8 +38,7 @@ def get_10k_url(cik: str, fiscal_year: str = FISCAL_YEAR) -> str:
 
     filings = data["filings"]["recent"]
     for i, form in enumerate(filings["form"]):
-        # reportDate is the period the filing covers, e.g. "2023-09-30" for
-        # Apple's FY2023 10-K. Match its year to pick the right fiscal year.
+        # reportDate = the period covered, e.g. "2023-09-30" for Apple FY2023
         report_date = filings["reportDate"][i]
         if form == "10-K" and report_date.startswith(fiscal_year):
             accession = filings["accessionNumber"][i]
@@ -57,11 +53,13 @@ def get_10k_url(cik: str, fiscal_year: str = FISCAL_YEAR) -> str:
 
 
 def download_and_parse(url: str) -> str:
+    # grab the HTML, flatten it to plain text
     response = requests.get(url, headers=HEADERS)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.content, "lxml")
 
+    # script/style tags are code, not report text
     for tag in soup(["script", "style"]):
         tag.decompose()
 
@@ -69,6 +67,7 @@ def download_and_parse(url: str) -> str:
 
 
 def save_text(text: str, company_name: str) -> str:
+    # e.g. data/apple_10k.txt
     os.makedirs("data", exist_ok=True)
     filepath = f"data/{company_name.lower().replace(' ', '_')}_10k.txt"
     with open(filepath, "w", encoding="utf-8") as f:

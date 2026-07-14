@@ -47,9 +47,12 @@ Question
 ├── src/
 │   ├── ingest.py    # Download a 10-K from SEC EDGAR and save it as text
 │   ├── index.py     # Chunk, embed, and store the text in Chroma
-│   └── query.py     # Answer a question via RAG and via the baseline
-├── data/            # Downloaded filings (gitignored, rebuilt by ingest.py)
+│   ├── query.py     # Answer a question via RAG and via the baseline
+│   └── evaluate.py  # Score both systems (RAGAS + Exact Match / F1) over the QA set
+├── data/
+│   └── qa_pairs.json  # Hand-authored QA benchmark (tracked; filings are gitignored)
 ├── chroma_db/       # Persisted vector store (gitignored, rebuilt by index.py)
+├── results/         # Evaluation outputs (gitignored, rebuilt by evaluate.py)
 ├── requirements.txt
 └── README.md
 ```
@@ -83,6 +86,9 @@ python3 src/index.py
 
 # 3. Ask a question — prints a RAG answer, a baseline answer, and the retrieved context
 python3 src/query.py "What was Apple's total net sales in fiscal 2023?"
+
+# 4. Score both systems over the QA benchmark (RAGAS + Exact Match / F1)
+python3 src/evaluate.py
 ```
 
 `query.py` also runs interactively if you omit the question:
@@ -130,8 +136,8 @@ EDGAR requires a descriptive `User-Agent` header on all requests.
 
 - [x] Offline indexing pipeline (Apple, FY2023)
 - [x] Online query pipeline (RAG + baseline)
-- [ ] 50 QA pairs
-- [ ] RAGAS + Exact Match / F1 evaluation
+- [x] Evaluation harness (RAGAS + Exact Match / F1), proven on 8 Apple QA pairs
+- [ ] Grow QA set to 16–17 Apple, then 50 across all five companies
 - [ ] Scale ingestion and indexing to all five companies
 
 ## Known limitations

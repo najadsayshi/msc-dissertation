@@ -1,9 +1,8 @@
-# This file is the ONLINE query pipeline. Given a question, it produces two
-# answers from the SAME model (GPT-4o-mini):
-#   - RAG:      retrieve the most relevant 10-K chunks, then answer using them.
-#   - Baseline: answer the same question with no document context.
-# Holding the model constant means any quality difference is attributable to
-# retrieval alone, which is the core experiment of the dissertation.
+# query.py - answer a question twice with the SAME model (gpt-4o-mini):
+#   RAG:      retrieve the most relevant 10-K chunks first, answer from those
+#   Baseline: no context at all, model's own memory
+# Same model both times, so any quality difference = retrieval. That's the
+# whole experiment.
 
 import sys
 
@@ -14,32 +13,37 @@ from langchain_core.documents import Document
 
 load_dotenv()
 
-# These must match how the vector store was built in index.py, or the question
-# vectors won't be comparable to the chunk vectors.
+# must match index.py, or the question vectors won't line up with the store
 CHROMA_DIR = "chroma_db"
 COLLECTION_NAME = "sec_10k_filings"
 EMBEDDING_MODEL = "text-embedding-3-small"
 
-# Same generator for both pipelines. temperature=0 makes answers deterministic
-# so the experiment is reproducible.
+# temperature 0 -> most repeatable answers
 CHAT_MODEL = "gpt-4o-mini"
 TEMPERATURE = 0
 TOP_K = 5
 
-# The RAG system prompt forces the model to ground its answer in the retrieved
-# context and to admit when the answer isn't there. This is what makes RAG
-# "faithful" — it should not fall back on its own memory.
+# RAG rules: use ONLY the context, admit it when the answer isn't there
 RAG_SYSTEM_PROMPT = (
     "You are a financial analyst assistant. Answer the question using ONLY the "
     "context extracts from the company's 10-K filing provided below. If the "
     "answer cannot be found in the context, say you cannot find it in the "
-    "filing. Do not use outside knowledge.\n\n"
+    "filing. Do not use outside knowledge. Answer concisely: give just the "
+    "figure or fact asked for.\n\n"
     "Context:\n{context}"
+)
+
+# baseline gets the same role and rules, minus the context - otherwise the
+# experiment changes two things at once (retrieval AND instructions)
+BASELINE_SYSTEM_PROMPT = (
+    "You are a financial analyst assistant. Answer the question about the "
+    "company's 10-K filing. If you do not know the answer, say so. Answer "
+    "concisely: give just the figure or fact asked for."
 )
 
 
 def load_vectorstore() -> Chroma:
-    """Reconnect to the persisted Chroma store built by index.py."""
+    # reconnect to the store index.py built
     embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
     return Chroma(
         persist_directory=CHROMA_DIR,
@@ -49,19 +53,21 @@ def load_vectorstore() -> Chroma:
 
 
 def retrieve(question: str, k: int = TOP_K) -> list[Document]:
-    """Embed the question and return the k most similar chunks (cosine)."""
+    # embed the question, return the k nearest chunks
     store = load_vectorstore()
     return store.similarity_search(question, k=k)
 
 
 def answer_rag(question: str, k: int = TOP_K) -> dict:
-    """RAG answer: retrieve context, then answer grounded in it.
-
-    Returns both the answer and the retrieved contexts. The contexts are kept
-    so the later RAGAS evaluation can judge faithfulness against them.
-    """
+    # returns the chunks too, not just the answer - RAGAS needs them later
+    # to judge faithfulness
     docs = retrieve(question, k=k)
-    context = "\n\n---\n\n".join(doc.page_content for doc in docs)
+
+    # join the chunk texts with a separator so the model can tell them apart
+    chunk_texts = []
+    for doc in docs:
+        chunk_texts.append(doc.page_content)
+    context = "\n\n---\n\n".join(chunk_texts)
 
     llm = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE)
     messages = [
@@ -72,18 +78,23 @@ def answer_rag(question: str, k: int = TOP_K) -> dict:
 
     return {
         "answer": response.content,
-        "contexts": [doc.page_content for doc in docs],
+        "contexts": chunk_texts,
     }
 
 
 def answer_baseline(question: str) -> str:
-    """Baseline answer: same model, no context — answers from its own memory."""
+    # same model, same instructions, no context
     llm = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE)
-    response = llm.invoke([("human", question)])
+    messages = [
+        ("system", BASELINE_SYSTEM_PROMPT),
+        ("human", question),
+    ]
+    response = llm.invoke(messages)
     return response.content
 
 
 def main():
+    # question from the command line, or ask for one
     if len(sys.argv) > 1:
         question = " ".join(sys.argv[1:])
     else:

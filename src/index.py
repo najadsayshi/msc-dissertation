@@ -1,3 +1,6 @@
+# index.py - chunk the 10-K text, embed each chunk, store it all in Chroma.
+# query.py searches this database later.
+
 import os
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -20,32 +23,48 @@ def load_text(filepath: str) -> str:
 
 
 def split_into_chunks(text: str) -> list[Document]:
+    # ~512-token chunks, 50-token overlap so a fact sitting on a boundary
+    # doesn't get cut in half
     splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         chunk_size=512,
         chunk_overlap=50,
     )
     chunks = splitter.split_text(text)
-    return [
-        Document(
+
+    # tag every chunk with its company - the ticker tag makes re-runs safe
+    # (see below) and lets retrieval filter per company later on
+    docs = []
+    for chunk in chunks:
+        doc = Document(
             page_content=chunk,
             metadata={"company": COMPANY_NAME, "ticker": TICKER, "source": SOURCE_FILE},
         )
-        for chunk in chunks
-    ]
+        docs.append(doc)
+    return docs
 
 
 def index_documents(docs: list[Document]) -> None:
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    Chroma.from_documents(
-        documents=docs,
-        embedding=embeddings,
+
+    store = Chroma(
         persist_directory=CHROMA_DIR,
+        embedding_function=embeddings,
         collection_name=COLLECTION_NAME,
-        # Retrieve by cosine similarity (matches the methodology). Chroma defaults
-        # to L2; for unit-normalised OpenAI embeddings the ranking is identical,
-        # but we set this explicitly so the code matches the stated design.
+        # cosine, to match the methodology. Chroma defaults to L2 - same
+        # ranking for these embeddings, but set it explicitly anyway
         collection_metadata={"hnsw:space": "cosine"},
     )
+
+    # Chroma only ever APPENDS, so delete this company's old chunks first -
+    # otherwise every re-run stores the same chunks again and retrieval
+    # starts returning duplicates
+    existing = store.get(where={"ticker": TICKER})
+    old_ids = existing["ids"]
+    if old_ids:
+        store.delete(ids=old_ids)
+        print(f"Removed {len(old_ids)} previously stored {TICKER} chunks (re-run detected).")
+
+    store.add_documents(docs)
 
 
 def main():
