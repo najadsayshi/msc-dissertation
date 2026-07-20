@@ -38,7 +38,6 @@ def get_10k_url(cik: str, fiscal_year: str = FISCAL_YEAR) -> str:
 
     filings = data["filings"]["recent"]
     for i, form in enumerate(filings["form"]):
-        # reportDate = the period covered, e.g. "2023-09-30" for Apple FY2023
         report_date = filings["reportDate"][i]
         if form == "10-K" and report_date.startswith(fiscal_year):
             accession = filings["accessionNumber"][i]
@@ -83,7 +82,7 @@ def main():
     url = get_10k_url(company["cik"])
     print(f"Found: {url}")
 
-    print("Downloading and parsing HTML (this may take a minute)...")
+    print("Downloading and parsing HTML")
     text = download_and_parse(url)
 
     filepath = save_text(text, company["name"])

@@ -1,5 +1,5 @@
 # index.py - chunk the 10-K text, embed each chunk, store it all in Chroma.
-# query.py searches this database later.
+
 
 import os
 from dotenv import load_dotenv

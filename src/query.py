@@ -1,8 +1,7 @@
 # query.py - answer a question twice with the SAME model (gpt-4o-mini):
 #   RAG:      retrieve the most relevant 10-K chunks first, answer from those
 #   Baseline: no context at all, model's own memory
-# Same model both times, so any quality difference = retrieval. That's the
-# whole experiment.
+
 
 import sys
 
@@ -18,7 +17,7 @@ CHROMA_DIR = "chroma_db"
 COLLECTION_NAME = "sec_10k_filings"
 EMBEDDING_MODEL = "text-embedding-3-small"
 
-# temperature 0 -> most repeatable answers
+# temperature 0 -> to make answer repeatable
 CHAT_MODEL = "gpt-4o-mini"
 TEMPERATURE = 0
 TOP_K = 5
@@ -33,8 +32,7 @@ RAG_SYSTEM_PROMPT = (
     "Context:\n{context}"
 )
 
-# baseline gets the same role and rules, minus the context - otherwise the
-# experiment changes two things at once (retrieval AND instructions)
+# baseline gets the same role and rules, minus the context 
 BASELINE_SYSTEM_PROMPT = (
     "You are a financial analyst assistant. Answer the question about the "
     "company's 10-K filing. If you do not know the answer, say so. Answer "
@@ -62,6 +60,7 @@ def answer_rag(question: str, k: int = TOP_K) -> dict:
     # returns the chunks too, not just the answer - RAGAS needs them later
     # to judge faithfulness
     docs = retrieve(question, k=k)
+    
 
     # join the chunk texts with a separator so the model can tell them apart
     chunk_texts = []
@@ -75,6 +74,7 @@ def answer_rag(question: str, k: int = TOP_K) -> dict:
         ("human", question),
     ]
     response = llm.invoke(messages)
+    
 
     return {
         "answer": response.content,

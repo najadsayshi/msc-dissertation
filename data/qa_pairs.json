@@ -14,53 +14,6 @@
     "question": "What was Apple's net income in fiscal 2023?",
     "ground_truth": "$97.0 billion",
     "source": "The Company's total net sales were $383.3 billion and net income was $97.0 billion during 2023."
-  },
-  {
-    "id": "AAPL-003",
-    "company": "AAPL",
-    "type": "numerical",
-    "question": "How much did Apple spend on research and development in fiscal 2023?",
-    "ground_truth": "$29,915 million (approximately $29.9 billion)",
-    "source": "Operating expenses: Research and development 29,915 26,251 21,914 (dollars in millions)."
-  },
-  {
-    "id": "AAPL-004",
-    "company": "AAPL",
-    "type": "numerical",
-    "question": "What were Apple's iPhone net sales in fiscal 2023?",
-    "ground_truth": "$200,583 million (approximately $200.6 billion)",
-    "source": "Net sales by category: iPhone 200,583 205,489 191,973 (dollars in millions)."
-  },
-  {
-    "id": "AAPL-005",
-    "company": "AAPL",
-    "type": "factual",
-    "question": "Who is Apple's independent registered public accounting firm (auditor)?",
-    "ground_truth": "Ernst & Young LLP",
-    "source": "Report of Independent Registered Public Accounting Firm ... Ernst & Young LLP"
-  },
-  {
-    "id": "AAPL-006",
-    "company": "AAPL",
-    "type": "factual",
-    "question": "Approximately how many full-time equivalent employees did Apple have as of September 30, 2023?",
-    "ground_truth": "Approximately 161,000",
-    "source": "As of September 30, 2023, the Company had approximately 161,000 full-time equivalent employees."
-  },
-  {
-    "id": "AAPL-007",
-    "company": "AAPL",
-    "type": "factual",
-    "question": "What was the size of the new share repurchase program Apple announced in May 2023?",
-    "ground_truth": "Up to $90 billion",
-    "source": "In May 2023, the Company announced a new share repurchase program of up to $90 billion and raised its quarterly dividend from $0.23 to $0.24 per share."
-  },
-  {
-    "id": "AAPL-008",
-    "company": "AAPL",
-    "type": "risk",
-    "question": "Where is substantially all of Apple's manufacturing performed, and why does this concentration pose a risk?",
-    "ground_truth": "Substantially all of Apple's manufacturing is outsourced to partners located primarily in China mainland, India, Japan, South Korea, Taiwan, and Vietnam; this geographic concentration exposes Apple to trade restrictions, tariffs, natural disasters, and supply-chain disruptions in those regions.",
-    "source": "Substantially all of the Company's manufacturing is performed in whole or in part by outsourcing partners located primarily in China mainland, India, Japan, South Korea, Taiwan and Vietnam."
   }
+
 ]

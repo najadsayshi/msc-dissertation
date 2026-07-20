@@ -1,14 +1,4 @@
-# evaluate.py - scores the answers. query.py answers, this file marks.
-#
-# For each question in data/qa_pairs.json:
-#   1. get both answers (RAG + baseline, reusing query.py)
-#   2. grade them:
-#        - RAGAS: an LLM does the marking. Main metric.
-#        - EM / F1 / contains: plain string+number checks, free, deterministic.
-#   3. print a table, save everything to results/
-#
-# Note: 3 of the 4 RAGAS metrics judge the retrieved context. Baseline has no
-# retrieval, so it only gets Answer Relevance + the string checks.
+# evaluate.py - scores the answers.
 
 import os
 import re
@@ -24,11 +14,11 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.metrics import (
     faithfulness,
     answer_relevancy,
-    context_precision,   # RAGAS's name for "Context Relevance"
+    context_precision,   
     context_recall,
 )
 
-# reuse the actual pipeline from query.py - don't rebuild it here
+# importing the actual pipeline from query.py 
 from query import answer_rag, answer_baseline, EMBEDDING_MODEL, TEMPERATURE
 
 load_dotenv()
@@ -36,8 +26,7 @@ load_dotenv()
 QA_FILE = "data/qa_pairs.json"
 RESULTS_DIR = "results"
 
-# the marker. Deliberately stronger than the generator, so gpt-4o-mini isn't
-# grading its own answers (self-preference bias). Generator stays gpt-4o-mini.
+# the marker or the judge
 JUDGE_MODEL = "gpt-4o"
 
 # which RAGAS metrics each system gets
@@ -45,9 +34,8 @@ RAG_METRICS = [faithfulness, answer_relevancy, context_precision, context_recall
 BASELINE_METRICS = [answer_relevancy]
 
 
-# --------------------------------------------------------------------------- #
 # String/number checks: EM, F1, contains. No API calls, no cost.
-# --------------------------------------------------------------------------- #
+
 def normalize(text: str) -> str:
     # lowercase, strip punctuation, drop a/an/the, squash spaces
     text = text.lower()
@@ -63,7 +51,6 @@ def normalize(text: str) -> str:
 
 
 def exact_match(prediction: str, ground_truth: str) -> float:
-    # 1.0 only if identical after cleaning
     return float(normalize(prediction) == normalize(ground_truth))
 
 
@@ -120,9 +107,7 @@ def _close_enough(a: float, b: float) -> bool:
 
 def contains_answer(prediction: str, ground_truth: str) -> float:
     # does the key fact appear ANYWHERE in the answer?
-    # - truth has numbers: at least one of them must show up (within
-    #   tolerance). "at least one" because some ground truths give the same
-    #   figure in two units, and a correct answer states one of them.
+    # - truth has numbers: at least one of them must show up . "at least one" because some ground truths give the same figure in two units, and a correct answer states one of them.
     # - no numbers ("Ernst & Young LLP"): substring check instead.
     # A correct full-sentence answer scores 1.0 - the case EM gets wrong.
     gt_numbers = numbers_in(ground_truth)
@@ -140,9 +125,7 @@ def contains_answer(prediction: str, ground_truth: str) -> float:
             return 0.0
 
 
-# --------------------------------------------------------------------------- #
 # Step 1 - ask both systems everything
-# --------------------------------------------------------------------------- #
 def run_systems(qa_pairs: list[dict]) -> list[dict]:
     records = []
     for i, qa in enumerate(qa_pairs, 1):
@@ -172,9 +155,9 @@ def run_systems(qa_pairs: list[dict]) -> list[dict]:
     return records
 
 
-# --------------------------------------------------------------------------- #
+#  #
 # Step 2 - RAGAS grading
-# --------------------------------------------------------------------------- #
+
 def build_judge():
     # the LLM + embeddings RAGAS marks with
     llm = LangchainLLMWrapper(ChatOpenAI(model=JUDGE_MODEL, temperature=TEMPERATURE))
@@ -202,6 +185,8 @@ def run_ragas(records: list[dict]) -> None:
         llm=llm,
         embeddings=embeddings,
     ).to_pandas()
+
+    print(rag_df)
 
     # baseline -> Answer Relevance only
     base_samples = []
@@ -245,9 +230,7 @@ def _safe_float(value) -> float | None:
         return None
 
 
-# --------------------------------------------------------------------------- #
 # Step 3 - average, print, save
-# --------------------------------------------------------------------------- #
 def _mean(values: list) -> float | None:
     # average, skipping Nones
     nums = []
@@ -325,44 +308,44 @@ def summarise(records: list[dict]) -> dict:
             if r["type"] == qtype:
                 rows_of_type.append(r)
         summary["by_type"][qtype] = agg(rows_of_type)
-
+    
     return summary
 
 
-def print_report(records: list[dict], summary: dict) -> None:
-    print("\n" + "=" * 78)
-    print("PER-QUESTION RESULTS")
-    print("=" * 78)
-    # "Has" = the contains check
-    header = f"{'ID':<9}{'type':<10}{'Faith':>7}{'AnsRel':>8}{'CtxRel':>8}{'CtxRec':>8}{'R-EM':>6}{'R-F1':>6}{'R-Has':>7}{'B-EM':>6}{'B-F1':>6}{'B-Has':>7}"
-    print(header)
-    print("-" * len(header))
-    for r in records:
-        g = r["rag_ragas"]   # keeps the print line below readable
-        print(
-            f"{r['id']:<9}{r['type']:<10}"
-            f"{_fmt(g['faithfulness']):>7}{_fmt(g['answer_relevancy']):>8}"
-            f"{_fmt(g['context_precision']):>8}{_fmt(g['context_recall']):>8}"
-            f"{r['rag_em']:>6.0f}{r['rag_f1']:>6.2f}{r['rag_contains']:>7.0f}"
-            f"{r['baseline_em']:>6.0f}{r['baseline_f1']:>6.2f}{r['baseline_contains']:>7.0f}"
-        )
+# def print_report(records: list[dict], summary: dict) -> None:
+#     print("\n" + "=" * 78)
+#     print("PER-QUESTION RESULTS")
+#     print("=" * 78)
+#     # "Has" = the contains check
+#     header = f"{'ID':<9}{'type':<10}{'Faith':>7}{'AnsRel':>8}{'CtxRel':>8}{'CtxRec':>8}{'R-EM':>6}{'R-F1':>6}{'R-Has':>7}{'B-EM':>6}{'B-F1':>6}{'B-Has':>7}"
+#     print(header)
+#     print("-" * len(header))
+#     for r in records:
+#         g = r["rag_ragas"]   # keeps the print line below readable
+#         print(
+#             f"{r['id']:<9}{r['type']:<10}"
+#             f"{_fmt(g['faithfulness']):>7}{_fmt(g['answer_relevancy']):>8}"
+#             f"{_fmt(g['context_precision']):>8}{_fmt(g['context_recall']):>8}"
+#             f"{r['rag_em']:>6.0f}{r['rag_f1']:>6.2f}{r['rag_contains']:>7.0f}"
+#             f"{r['baseline_em']:>6.0f}{r['baseline_f1']:>6.2f}{r['baseline_contains']:>7.0f}"
+#         )
 
-    print("\n" + "=" * 78)
-    print("AGGREGATES (RAG vs Baseline)")
-    print("=" * 78)
-    _print_agg("OVERALL", summary["overall"])
-    for qtype, agg_result in summary["by_type"].items():
-        _print_agg(f"type={qtype}", agg_result)
+#     print("\n" + "=" * 78)
+#     print("AGGREGATES (RAG vs Baseline)")
+#     print("=" * 78)
+#     _print_agg("OVERALL", summary["overall"])
+#     for qtype, agg_result in summary["by_type"].items():
+#         _print_agg(f"type={qtype}", agg_result)
 
 
-def _print_agg(label: str, agg: dict) -> None:
-    rag, base = agg["rag"], agg["baseline"]
-    print(f"\n{label}  (n={agg['n']})")
-    print(f"  RAG      Faith={_fmt(rag['faithfulness'])}  AnsRel={_fmt(rag['answer_relevancy'])}"
-          f"  CtxRel={_fmt(rag['context_precision'])}  CtxRec={_fmt(rag['context_recall'])}"
-          f"  EM={_fmt(rag['em'])}  F1={_fmt(rag['f1'])}  Has={_fmt(rag['contains'])}")
-    print(f"  Baseline AnsRel={_fmt(base['answer_relevancy'])}  EM={_fmt(base['em'])}  F1={_fmt(base['f1'])}"
-          f"  Has={_fmt(base['contains'])}   (context metrics N/A - baseline has no retrieval)")
+# def _print_agg(label: str, agg: dict) -> None:
+#     rag, base = agg["rag"], agg["baseline"]
+#     print(f"\n{label}  (n={agg['n']})")
+#     print(f"  RAG      Faith={_fmt(rag['faithfulness'])}  AnsRel={_fmt(rag['answer_relevancy'])}"
+#           f"  CtxRel={_fmt(rag['context_precision'])}  CtxRec={_fmt(rag['context_recall'])}"
+#           f"  EM={_fmt(rag['em'])}  F1={_fmt(rag['f1'])}  Has={_fmt(rag['contains'])}")
+#     print(f"  Baseline AnsRel={_fmt(base['answer_relevancy'])}  EM={_fmt(base['em'])}  F1={_fmt(base['f1'])}"
+#           f"  Has={_fmt(base['contains'])}   (context metrics N/A - baseline has no retrieval)")
 
 
 def _fmt(x) -> str:
@@ -373,7 +356,7 @@ def _fmt(x) -> str:
         return f"{x:.2f}"
 
 
-# --------------------------------------------------------------------------- #
+# main #
 def main():
     with open(QA_FILE, "r", encoding="utf-8") as f:
         qa_pairs = json.load(f)
@@ -383,7 +366,7 @@ def main():
     records = run_systems(qa_pairs)
     run_ragas(records)
     summary = summarise(records)
-    print_report(records, summary)
+    # print_report(records, summary)
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
     with open(f"{RESULTS_DIR}/apple_results.json", "w", encoding="utf-8") as f:
