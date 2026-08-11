@@ -4,7 +4,7 @@ A Retrieval-Augmented Generation (RAG) pipeline for answering questions about
 company annual reports (SEC 10-K filings), evaluated against a standalone LLM
 baseline that uses the **same generator model** but no retrieval.
 
-> **MSc dissertation (COMP702), University of Liverpool, 2025/26.**
+> **MSc dissertation (COMP702), University of Liverpool, 2024/25.**
 > Supervisor: Dr. Blaine Keetch.
 
 ## Research question
@@ -78,18 +78,24 @@ echo "OPENAI_API_KEY=sk-..." > .env
 Run all commands **from the project root** (the scripts use paths relative to it).
 
 ```bash
-# 1. Download a company's 10-K (currently configured for Apple, FY2023)
-python3 src/ingest.py
+# 1. Download a company's 10-K (--ticker AAPL|MSFT|JPM|XOM|JNJ, or --all for five)
+python3 src/ingest.py --ticker AAPL
+python3 src/ingest.py --all
 
-# 2. Build the vector store from the downloaded filing
-python3 src/index.py
+# 2. Build the vector store from the downloaded filings (safe to re-run)
+python3 src/index.py --all
 
 # 3. Ask a question — prints a RAG answer, a baseline answer, and the retrieved context
 python3 src/query.py "What was Apple's total net sales in fiscal 2023?"
 
 # 4. Score both systems over the QA benchmark (RAGAS + Exact Match / F1)
-python3 src/evaluate.py
+python3 src/evaluate.py --run-name all
+python3 src/evaluate.py --company AAPL --run-name apple   # one company only
 ```
+
+Evaluation writes answers to `results/<run-name>_records.jsonl` as each question
+completes, so an interrupted run resumes from where it stopped instead of paying
+for the same API calls twice.
 
 `query.py` also runs interactively if you omit the question:
 
@@ -101,9 +107,16 @@ python3 src/query.py
 ## Evaluation
 
 - **Primary:** RAGAS metrics — Faithfulness, Answer Relevance, Context Relevance,
-  Context Recall.
-- **Secondary:** Exact Match and F1 against 50 manually constructed QA pairs
-  (factual, numerical, and risk-based questions).
+  Context Recall (judged by `gpt-4o`, a stronger model than either system under test).
+- **Secondary:** Exact Match, F1 and a `contains` check (0.5% numeric tolerance)
+  against the manually constructed QA pairs — factual, numerical and risk-based.
+- **Retrieval diagnostics (no LLM judge, so free and deterministic):** retrieval
+  hit-rate — was the answer present in the retrieved chunks at all — and how many
+  of the 5 retrieved chunks came from the correct company.
+
+Retrieval is **not** filtered by ticker: all five filings share one collection and
+the system is not told which company a question refers to. Cross-company retrieval
+errors are therefore measured rather than prevented.
 
 ## Dataset
 
@@ -134,11 +147,12 @@ EDGAR requires a descriptive `User-Agent` header on all requests.
 
 ## Status
 
-- [x] Offline indexing pipeline (Apple, FY2023)
+- [x] Offline indexing pipeline (all five companies, FY2023 — 1,766 chunks)
 - [x] Online query pipeline (RAG + baseline)
 - [x] Evaluation harness (RAGAS + Exact Match / F1), proven on 8 Apple QA pairs
-- [ ] Grow QA set to 16–17 Apple, then 50 across all five companies
-- [ ] Scale ingestion and indexing to all five companies
+- [x] Checkpointing, per-run output names, retrieval diagnostics
+- [ ] Grow QA set to 50 across all five companies
+- [ ] Final run with pinned model snapshots; frozen results
 
 ## Known limitations
 

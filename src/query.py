@@ -40,18 +40,26 @@ BASELINE_SYSTEM_PROMPT = (
 )
 
 
+# built once and reused - 50 questions shouldn't mean 50 Chroma clients
+_STORE = None
+
+
 def load_vectorstore() -> Chroma:
     # reconnect to the store index.py built
-    embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
-    return Chroma(
-        persist_directory=CHROMA_DIR,
-        embedding_function=embeddings,
-        collection_name=COLLECTION_NAME,
-    )
+    global _STORE
+    if _STORE is None:
+        embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+        _STORE = Chroma(
+            persist_directory=CHROMA_DIR,
+            embedding_function=embeddings,
+            collection_name=COLLECTION_NAME,
+        )
+    return _STORE
 
 
 def retrieve(question: str, k: int = TOP_K) -> list[Document]:
-    # embed the question, return the k nearest chunks
+    # embed the question, return the k nearest chunks. no ticker filter - the
+    # system isn't told which company to look in, that's the point
     store = load_vectorstore()
     return store.similarity_search(question, k=k)
 
@@ -62,10 +70,14 @@ def answer_rag(question: str, k: int = TOP_K) -> dict:
     docs = retrieve(question, k=k)
     
 
-    # join the chunk texts with a separator so the model can tell them apart
+    # join the chunk texts with a separator so the model can tell them apart.
+    # tickers come along too - with all five filings in one collection it's worth
+    # knowing when a chunk came from the wrong company
     chunk_texts = []
+    chunk_tickers = []
     for doc in docs:
         chunk_texts.append(doc.page_content)
+        chunk_tickers.append(doc.metadata.get("ticker"))
     context = "\n\n---\n\n".join(chunk_texts)
 
     llm = ChatOpenAI(model=CHAT_MODEL, temperature=TEMPERATURE)
@@ -79,6 +91,7 @@ def answer_rag(question: str, k: int = TOP_K) -> dict:
     return {
         "answer": response.content,
         "contexts": chunk_texts,
+        "tickers": chunk_tickers,
     }
 
 
