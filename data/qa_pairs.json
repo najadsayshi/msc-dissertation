@@ -59,24 +59,24 @@
     "id": "AAPL-008",
     "company": "AAPL",
     "type": "risk",
-    "question": "Where is substantially all of Apple's manufacturing performed, and why does this concentration pose a risk?",
-    "ground_truth": "Substantially all of Apple's manufacturing is outsourced to partners located primarily in China mainland, India, Japan, South Korea, Taiwan, and Vietnam; this geographic concentration exposes Apple to trade restrictions, tariffs, natural disasters, and supply-chain disruptions in those regions.",
+    "question": "Where does Apple manufacture most of its products?",
+    "ground_truth": "Substantially all of Apple's manufacturing is performed in whole or in part by outsourcing partners located primarily in China mainland, India, Japan, South Korea, Taiwan, and Vietnam.",
     "source": "Substantially all of the Company's manufacturing is performed in whole or in part by outsourcing partners located primarily in China mainland, India, Japan, South Korea, Taiwan and Vietnam."
   },
   {
     "id": "AAPL-009",
     "company": "AAPL",
     "type": "risk",
-    "question": "Why does Apple's reliance on bespoke parts leave it exposed when it launches something new?",
-    "ground_truth": "Apple's new products often use custom components that are available from only a single supplier, so capacity constraints while a supplier's yields mature, or any interruption in that one source, can constrain or delay production.",
+    "question": "Why can Apple's use of custom components create production constraints for new products?",
+    "ground_truth": "Apple's new products often use custom components available from only one source, and initial capacity constraints may exist until suppliers' yields mature or their manufacturing capacities increase.",
     "source": "The Company's new products often utilize custom components available from only one source. When a component or product uses new technologies, initial capacity constraints may exist until the suppliers' yields have matured or their manufacturing capacities have increased."
   },
   {
     "id": "AAPL-010",
     "company": "AAPL",
     "type": "risk",
-    "question": "How does Apple characterise the competitive pressure in the markets it sells into?",
-    "ground_truth": "Apple describes its markets as highly competitive and subject to rapid technological change, marked by aggressive price competition that pushes gross margins down, frequent new product introductions, short product life cycles and evolving industry standards, and it warns it may be unable to compete effectively.",
+    "question": "How does Apple characterize the competitive pressure in the markets for its products and services?",
+    "ground_truth": "Apple describes its markets as highly competitive, with aggressive price competition and resulting downward pressure on gross margins, frequent introduction of new products and services, short product life cycles, and evolving industry standards.",
     "source": "The markets for the Company's products and services are highly competitive, and are characterized by aggressive price competition and resulting downward pressure on gross margins, frequent introduction of new products and services, short product life cycles, evolving industry standards."
   },
 
@@ -237,8 +237,8 @@
     "id": "JPM-010",
     "company": "JPM",
     "type": "risk",
-    "question": "What does JPMorgan Chase say a successful cyber attack could do?",
-    "ground_truth": "JPMorgan Chase warns of the harm that could be caused by a successful cyber attack affecting the firm, alongside legal and regulatory risks related to safeguarding personal information.",
+    "question": "What harm does JPMorgan Chase warn could result from a successful cyber attack?",
+    "ground_truth": "JPMorgan Chase warns of harm that could be caused by a successful cyber attack affecting the firm.",
     "source": "legal and regulatory risks related to safeguarding personal information; the harm that could be caused by a successful cyber attack affecting JPMorgan Chase or by other extraordinary events."
   },
 
@@ -311,15 +311,15 @@
     "company": "XOM",
     "type": "risk",
     "question": "What kind of attackers does ExxonMobil say it faces in the digital domain, and what damage could result?",
-    "ground_truth": "ExxonMobil says it is regularly subject to attempted cybersecurity disruptions from a variety of sources including state-sponsored actors, and that such disruptions could cause physical harm to people or the environment, damage or destroy assets, compromise business systems, and result in proprietary or personal information being altered, lost or stolen.",
+    "ground_truth": "ExxonMobil says it is regularly subject to attempted cybersecurity disruptions from a variety of sources, including state-sponsored actors, and that such disruptions could cause physical harm to people or the environment, damage or destroy assets, and compromise business systems.",
     "source": "ExxonMobil is regularly subject to attempted cybersecurity disruptions from a variety of sources including state-sponsored actors. Cybersecurity disruptions could cause physical harm to people or the environment; damage or destroy assets; compromise business systems."
   },
   {
     "id": "XOM-010",
     "company": "XOM",
     "type": "risk",
-    "question": "How can government policy restrict ExxonMobil's access to reserves?",
-    "ground_truth": "A number of countries limit access to their oil and gas resources, including by restricting leasing or permitting activities, or may place resources off-limits from development altogether, and such restrictions on production could increase.",
+    "question": "How can government policy restrict ExxonMobil's access to oil and gas resources?",
+    "ground_truth": "A number of countries limit access to their oil and gas resources, including by restricting leasing or permitting activities, or may place resources off-limits from development altogether.",
     "source": "A number of countries limit access to their oil and gas resources, including by restricting leasing or permitting activities, or may place resources off-limits from development altogether."
   },
 
@@ -383,16 +383,16 @@
     "id": "JNJ-008",
     "company": "JNJ",
     "type": "risk",
-    "question": "What consequences does Johnson & Johnson foresee if doubts arise over whether its products are safe or work?",
-    "ground_truth": "Product efficacy or safety concerns, whether or not based on scientific evidence, could potentially result in product withdrawals, recalls, regulatory action on the part of the United States Food and Drug Administration and other regulators, and declining sales.",
+    "question": "What consequences does Johnson & Johnson foresee if concerns arise over whether its products are safe or effective?",
+    "ground_truth": "Product efficacy or safety concerns, whether or not based on scientific evidence, could potentially result in product withdrawals, recalls, and regulatory action by the United States Food and Drug Administration and other regulators.",
     "source": "Product efficacy or safety concerns, whether or not based on scientific evidence, potentially resulting in product withdrawals, recalls, regulatory action on the part of the United States Food and Drug Administration."
   },
   {
     "id": "JNJ-009",
     "company": "JNJ",
     "type": "risk",
-    "question": "What uncertainty does Johnson & Johnson note about the stake it still holds in the business it separated?",
-    "ground_truth": "Johnson & Johnson flags uncertainty over its ability to divest its remaining ownership interest in Kenvue Inc. and to realise the anticipated benefits from the separation, as well as Kenvue's ability to succeed as a standalone publicly traded company.",
+    "question": "What uncertainty does Johnson & Johnson note about its remaining ownership interest in Kenvue?",
+    "ground_truth": "Johnson & Johnson flags uncertainty over its ability to divest its remaining ownership interest in Kenvue Inc. and realize the anticipated benefits from the separation.",
     "source": "The Company's ability to divest the Company's remaining ownership interest in Kenvue Inc. (Kenvue) and realize the anticipated benefits from the separation; and"
   },
   {
