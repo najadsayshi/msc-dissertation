@@ -10,6 +10,7 @@ import collections
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from ragas import EvaluationDataset, SingleTurnSample, evaluate
+from ragas.run_config import RunConfig
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.metrics import (
@@ -34,8 +35,13 @@ JUDGE_MODEL = "gpt-4o"
 RAG_METRICS = [faithfulness, answer_relevancy, context_precision, context_recall]
 BASELINE_METRICS = [answer_relevancy]
 
+# ragas defaults to 16 questions judged at once, and faithfulness/context_recall
+# each fan out into several calls per question. that swamped the rate limit and
+# 30 of 50 came back NaN. 4 is slower and actually finishes.
+JUDGE_RUN_CONFIG = RunConfig(max_workers=4, timeout=300, max_retries=10)
 
-# String/number checks: EM, F1, contains. No API calls, no cost.
+
+# String checks: EM and F1. No API calls, no cost.
 
 # EDGAR text is full of typographic quotes and dashes. string.punctuation only
 # knows the ASCII ones, so "Company's" and "Company's" wouldn't match otherwise
@@ -89,87 +95,8 @@ def f1_score(prediction: str, ground_truth: str) -> float:
     return 2 * precision * recall / (precision + recall)
 
 
-def numbers_in(text: str) -> list[float]:
-    # pull the numbers out of text, KEEPING the decimal point:
-    # "29,915" -> 29915.0, "$97.0" -> 97.0
-    # (normalize() strips punctuation, which would make $97.0 and $9.70
-    # come out identical - can't use it for money)
-    found = []
-    for match in re.findall(r"\d[\d,]*\.?\d*", text):
-        cleaned = match.replace(",", "")
-        try:
-            found.append(float(cleaned))
-        except ValueError:
-            pass
-    return found
-
-
-def _close_enough(a: float, b: float) -> bool:
-    # numbers within 0.5% count as the same fact. Absorbs rounding
-    # (96.995 vs 97.0) but still fails real wrong answers
-    # (164,000 vs 161,000 is 1.9% off)
-    if a == b:
-        return True
-    largest = max(abs(a), abs(b))
-    difference = abs(a - b)
-    if difference / largest < 0.005:
-        return True
-    else:
-        return False
-
-
-def contains_answer(prediction: str, ground_truth: str) -> float:
-    # does the key fact appear ANYWHERE in the answer?
-    # - truth has numbers: at least one of them must show up . "at least one" because some ground truths give the same figure in two units, and a correct answer states one of them.
-    # - no numbers ("Ernst & Young LLP"): substring check instead.
-    # A correct full-sentence answer scores 1.0 - the case EM gets wrong.
-    gt_numbers = numbers_in(ground_truth)
-    if gt_numbers:
-        pred_numbers = numbers_in(prediction)
-        for value in gt_numbers:
-            for pred_value in pred_numbers:
-                if _close_enough(pred_value, value):
-                    return 1.0
-        return 0.0
-    else:
-        if normalize(ground_truth) in normalize(prediction):
-            return 1.0
-        else:
-            return 0.0
-
-
-def _close_enough_any_scale(a: float, b: float) -> bool:
-    # 10-K tables are printed in millions ("29,915") while ground truths are
-    # written in billions ("$29.9 billion"), so the same fact differs by 1000x.
-    # only used on chunks - answers must still get their units right
-    scale = 0.000001
-    while scale <= 1000000:
-        if _close_enough(a, b * scale):
-            return True
-        scale = scale * 1000
-    return False
-
-
-def retrieval_hit(contexts: list[str], ground_truth: str) -> float:
-    # did retrieval actually FETCH the answer? separates a search failure from a
-    # generation failure. no LLM judge here, so it's free and identical every run
-    gt_numbers = numbers_in(ground_truth)
-
-    for chunk in contexts:
-        if gt_numbers:
-            chunk_numbers = numbers_in(chunk)
-            for value in gt_numbers:
-                for chunk_value in chunk_numbers:
-                    if _close_enough_any_scale(chunk_value, value):
-                        return 1.0
-        else:
-            if normalize(ground_truth) in normalize(chunk):
-                return 1.0
-    return 0.0
-
-
-# which company a question belongs to, vs which filings the chunks came from.
-# picks up cross-company retrieval now that all five share one collection
+# not a score - a diagnostic for the no-ticker-filter decision. how many of the
+# 5 chunks came from the company the question is actually about
 def own_company_chunks(tickers: list, company: str) -> int:
     count = 0
     for ticker in tickers:
@@ -186,7 +113,7 @@ def score_pair(qa: dict) -> dict:
     rag = answer_rag(question)          # answer + the chunks it used
     baseline = answer_baseline(question)
 
-    # one dict per question. EM/F1/contains are free, so compute them now
+    # one dict per question. EM/F1 are free, so compute them now
     return {
         "id": qa["id"],
         "type": qa["type"],
@@ -198,13 +125,18 @@ def score_pair(qa: dict) -> dict:
         "baseline_answer": baseline,
         "rag_em": exact_match(rag["answer"], gt),
         "rag_f1": f1_score(rag["answer"], gt),
-        "rag_contains": contains_answer(rag["answer"], gt),
-        "retrieval_hit": retrieval_hit(rag["contexts"], gt),
         "own_company_chunks": own_company_chunks(rag["tickers"], qa["company"]),
         "baseline_em": exact_match(baseline, gt),
         "baseline_f1": f1_score(baseline, gt),
-        "baseline_contains": contains_answer(baseline, gt),
     }
+
+
+# rewrite the checkpoint with the judge's scores in it. answers were already
+# safe across runs; the judging is the expensive half and wasn't
+def save_checkpoint(records: list[dict], path: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r) + "\n")
 
 
 def load_checkpoint(path: str) -> dict:
@@ -258,8 +190,22 @@ def run_ragas(records: list[dict]) -> None:
     llm, embeddings = build_judge()
 
     # RAG has context -> all four metrics
-    rag_samples = []
+    # only judge what hasn't been judged. a re-run to patch 3 missing scores
+    # shouldn't re-score the 47 that were already fine
+    todo = []
     for r in records:
+        if needs_judging(r):
+            todo.append(r)
+
+    skipped = len(records) - len(todo)
+    if skipped:
+        print(f"\n{skipped} of {len(records)} already fully judged - skipping those.")
+    if not todo:
+        print("Nothing left to judge.")
+        return
+
+    rag_samples = []
+    for r in todo:
         sample = SingleTurnSample(
             user_input=r["question"],
             response=r["rag_answer"],
@@ -267,19 +213,20 @@ def run_ragas(records: list[dict]) -> None:
             reference=r["ground_truth"],
         )
         rag_samples.append(sample)
-    print("\nScoring RAG with RAGAS (4 metrics)...")
+    print(f"\nScoring RAG with RAGAS (4 metrics) on {len(todo)} questions...")
     rag_df = evaluate(
         dataset=EvaluationDataset(samples=rag_samples),
         metrics=RAG_METRICS,
         llm=llm,
         embeddings=embeddings,
+        run_config=JUDGE_RUN_CONFIG,
     ).to_pandas()
 
     print(rag_df)
 
     # baseline -> Answer Relevance only
     base_samples = []
-    for r in records:
+    for r in todo:
         sample = SingleTurnSample(
             user_input=r["question"],
             response=r["baseline_answer"],
@@ -291,18 +238,64 @@ def run_ragas(records: list[dict]) -> None:
         metrics=BASELINE_METRICS,
         llm=llm,
         embeddings=embeddings,
+        run_config=JUDGE_RUN_CONFIG,
     ).to_pandas()
 
-    # RAGAS keeps the rows in the order they were sent, so row i = record i
-    for i, r in enumerate(records):
-        rag_scores = {}
+    # RAGAS keeps the rows in the order they were sent, so row i = record i.
+    # a retry can still come back empty - keep whatever score already existed
+    # rather than overwriting a good one with None
+    for i, r in enumerate(todo):
+        rag_scores = r.get("rag_ragas", {})
         for m in RAG_METRICS:
-            rag_scores[m.name] = _safe_float(rag_df.iloc[i][m.name])
+            fresh = _safe_float(rag_df.iloc[i][m.name])
+            if fresh is not None or m.name not in rag_scores:
+                rag_scores[m.name] = fresh
         r["rag_ragas"] = rag_scores
 
-        baseline_scores = {}
-        baseline_scores["answer_relevancy"] = _safe_float(base_df.iloc[i]["answer_relevancy"])
+        baseline_scores = r.get("baseline_ragas", {})
+        fresh = _safe_float(base_df.iloc[i]["answer_relevancy"])
+        if fresh is not None or "answer_relevancy" not in baseline_scores:
+            baseline_scores["answer_relevancy"] = fresh
         r["baseline_ragas"] = baseline_scores
+
+    warn_if_incomplete(records)
+
+
+# a record is done when every metric has a real score. anything still None means
+# the judge failed on it and it's worth another go
+def needs_judging(record: dict) -> bool:
+    rag = record.get("rag_ragas")
+    base = record.get("baseline_ragas")
+    if not rag or not base:
+        return True
+
+    for m in RAG_METRICS:
+        if not isinstance(rag.get(m.name), (int, float)):
+            return True
+    if not isinstance(base.get("answer_relevancy"), (int, float)):
+        return True
+    return False
+
+
+# say so loudly when the judge didn't score everything - the means below are
+# computed over whatever survived, which is easy to mistake for the full set
+def warn_if_incomplete(records: list[dict]) -> None:
+    short = []
+    for m in RAG_METRICS:
+        scored = 0
+        for r in records:
+            if isinstance(r["rag_ragas"].get(m.name), (int, float)):
+                scored += 1
+        if scored < len(records):
+            short.append(f"{m.name} {scored}/{len(records)}")
+
+    if short:
+        print()
+        print("!" * 70)
+        print("WARNING: RAGAS did not score every question. Means below are over")
+        print("the scored subset only, NOT all", len(records), "questions.")
+        print("  " + "   ".join(short))
+        print("!" * 70)
 
 
 def _safe_float(value) -> float | None:
@@ -333,6 +326,17 @@ def _mean(values: list) -> float | None:
         return None
 
 
+def _coverage(values: list) -> str:
+    # how many of these actually got a score. RAGAS quietly returns NaN when a
+    # judge call fails, and _mean skips those - without this a half-scored run
+    # prints exactly like a full one
+    scored = 0
+    for v in values:
+        if isinstance(v, (int, float)):
+            scored += 1
+    return f"{scored}/{len(values)}"
+
+
 def agg(rows: list[dict]) -> dict:
     # one list per metric, then average each
     rag_faithfulness = []
@@ -341,13 +345,10 @@ def agg(rows: list[dict]) -> dict:
     rag_context_recall = []
     rag_em = []
     rag_f1 = []
-    rag_contains = []
-    retrieval_hits = []
     own_chunks = []
     baseline_answer_relevancy = []
     baseline_em = []
     baseline_f1 = []
-    baseline_contains = []
 
     for r in rows:
         rag_faithfulness.append(r["rag_ragas"]["faithfulness"])
@@ -356,13 +357,10 @@ def agg(rows: list[dict]) -> dict:
         rag_context_recall.append(r["rag_ragas"]["context_recall"])
         rag_em.append(r["rag_em"])
         rag_f1.append(r["rag_f1"])
-        rag_contains.append(r["rag_contains"])
-        retrieval_hits.append(r["retrieval_hit"])
         own_chunks.append(r["own_company_chunks"])
         baseline_answer_relevancy.append(r["baseline_ragas"]["answer_relevancy"])
         baseline_em.append(r["baseline_em"])
         baseline_f1.append(r["baseline_f1"])
-        baseline_contains.append(r["baseline_contains"])
 
     return {
         "n": len(rows),
@@ -373,15 +371,21 @@ def agg(rows: list[dict]) -> dict:
             "context_recall": _mean(rag_context_recall),
             "em": _mean(rag_em),
             "f1": _mean(rag_f1),
-            "contains": _mean(rag_contains),
-            "retrieval_hit": _mean(retrieval_hits),
             "own_company_chunks": _mean(own_chunks),
         },
         "baseline": {
             "answer_relevancy": _mean(baseline_answer_relevancy),
             "em": _mean(baseline_em),
             "f1": _mean(baseline_f1),
-            "contains": _mean(baseline_contains),
+        },
+        # how many questions each RAGAS metric actually scored - a mean over 20
+        # of 50 is not the same claim as a mean over 50
+        "coverage": {
+            "faithfulness": _coverage(rag_faithfulness),
+            "answer_relevancy": _coverage(rag_answer_relevancy),
+            "context_precision": _coverage(rag_context_precision),
+            "context_recall": _coverage(rag_context_recall),
+            "baseline_answer_relevancy": _coverage(baseline_answer_relevancy),
         },
     }
 
@@ -415,13 +419,12 @@ def summarise(records: list[dict]) -> dict:
 
 
 def print_report(records: list[dict], summary: dict) -> None:
-    print("\n" + "=" * 92)
+    print("\n" + "=" * 80)
     print("PER-QUESTION RESULTS")
-    print("=" * 92)
-    # "Has" = the contains check, "Hit" = answer was in the retrieved chunks,
+    print("=" * 80)
     # "Own" = how many of the 5 chunks came from the right company
     header = (f"{'ID':<10}{'type':<10}{'Faith':>7}{'AnsRel':>8}{'CtxRel':>8}{'CtxRec':>8}"
-              f"{'Hit':>5}{'Own':>5}{'R-EM':>6}{'R-F1':>6}{'R-Has':>7}{'B-EM':>6}{'B-F1':>6}{'B-Has':>7}")
+              f"{'Own':>5}{'R-EM':>6}{'R-F1':>6}{'B-EM':>6}{'B-F1':>6}")
     print(header)
     print("-" * len(header))
     for r in records:
@@ -430,14 +433,14 @@ def print_report(records: list[dict], summary: dict) -> None:
             f"{r['id']:<10}{r['type']:<10}"
             f"{_fmt(g['faithfulness']):>7}{_fmt(g['answer_relevancy']):>8}"
             f"{_fmt(g['context_precision']):>8}{_fmt(g['context_recall']):>8}"
-            f"{r['retrieval_hit']:>5.0f}{r['own_company_chunks']:>5.0f}"
-            f"{r['rag_em']:>6.0f}{r['rag_f1']:>6.2f}{r['rag_contains']:>7.0f}"
-            f"{r['baseline_em']:>6.0f}{r['baseline_f1']:>6.2f}{r['baseline_contains']:>7.0f}"
+            f"{r['own_company_chunks']:>5.0f}"
+            f"{r['rag_em']:>6.0f}{r['rag_f1']:>6.2f}"
+            f"{r['baseline_em']:>6.0f}{r['baseline_f1']:>6.2f}"
         )
 
-    print("\n" + "=" * 92)
+    print("\n" + "=" * 80)
     print("AGGREGATES (RAG vs Baseline)")
-    print("=" * 92)
+    print("=" * 80)
     _print_agg("OVERALL", summary["overall"])
     for qtype, agg_result in summary["by_type"].items():
         _print_agg(f"type={qtype}", agg_result)
@@ -447,14 +450,17 @@ def print_report(records: list[dict], summary: dict) -> None:
 
 def _print_agg(label: str, agg: dict) -> None:
     rag, base = agg["rag"], agg["baseline"]
+    cov = agg["coverage"]
     print(f"\n{label}  (n={agg['n']})")
     print(f"  RAG      Faith={_fmt(rag['faithfulness'])}  AnsRel={_fmt(rag['answer_relevancy'])}"
           f"  CtxRel={_fmt(rag['context_precision'])}  CtxRec={_fmt(rag['context_recall'])}"
-          f"  EM={_fmt(rag['em'])}  F1={_fmt(rag['f1'])}  Has={_fmt(rag['contains'])}")
-    print(f"           RetrievalHit={_fmt(rag['retrieval_hit'])}"
-          f"  OwnCompanyChunks={_fmt(rag['own_company_chunks'])}/5")
+          f"  EM={_fmt(rag['em'])}  F1={_fmt(rag['f1'])}")
+    # the count behind each RAGAS mean, not the number of questions asked
+    print(f"           scored: Faith={cov['faithfulness']}  AnsRel={cov['answer_relevancy']}"
+          f"  CtxRel={cov['context_precision']}  CtxRec={cov['context_recall']}")
+    print(f"           OwnCompanyChunks={_fmt(rag['own_company_chunks'])}/5   (diagnostic, not a score)")
     print(f"  Baseline AnsRel={_fmt(base['answer_relevancy'])}  EM={_fmt(base['em'])}  F1={_fmt(base['f1'])}"
-          f"  Has={_fmt(base['contains'])}   (context metrics N/A - baseline has no retrieval)")
+          f"   (context metrics N/A - baseline has no retrieval)")
 
 
 def _fmt(x) -> str:
@@ -491,6 +497,8 @@ def main():
     # ask -> grade -> average -> print
     records = run_systems(qa_pairs, checkpoint_path)
     run_ragas(records)
+    # scores go back into the checkpoint so the next run only patches the gaps
+    save_checkpoint(records, checkpoint_path)
     summary = summarise(records)
     print_report(records, summary)
 
