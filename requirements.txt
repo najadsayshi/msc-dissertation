@@ -17,3 +17,8 @@ beautifulsoup4==4.15.0
 lxml==6.1.1
 tiktoken==0.13.0
 python-dotenv==1.2.2
+
+# comparison UI (src/app.py). chromadb already pulls these in, but the UI depends
+# on them directly so they're declared rather than borrowed
+fastapi==0.139.0
+uvicorn==0.50.0

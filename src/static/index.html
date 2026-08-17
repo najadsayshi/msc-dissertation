@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG vs Baseline - SEC 10-K QA</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<h1>RAG vs standalone LLM on SEC 10-K filings</h1>
+<div class="sub" id="framing">Both systems use the same model at temperature 0. The only difference is whether retrieved filing text is supplied as context.</div>
+
+<div class="tabs">
+  <button class="tab on" id="tab-ask">Ask</button>
+  <button class="tab" id="tab-eval">Evaluation results</button>
+</div>
+
+<div id="view-ask">
+  <div class="chips" id="chips"></div>
+
+  <label for="qsel">Benchmark question</label>
+  <select id="qsel"></select>
+
+  <label for="qbox">Question</label>
+  <div class="row">
+    <input type="text" id="qbox" placeholder="Ask something about a 10-K filing...">
+    <button class="go" id="askbtn">Ask both systems</button>
+  </div>
+
+  <div id="truth" class="truth hide"></div>
+
+  <div class="panels hide" id="panels">
+    <div class="panel">
+      <h3>RAG</h3>
+      <div class="note">retrieved filing passages supplied as context</div>
+      <div class="answer" id="rag-answer"></div>
+      <div class="metrics hide" id="rag-metrics"></div>
+    </div>
+    <div class="panel">
+      <h3>Baseline</h3>
+      <div class="note">same model, no retrieval</div>
+      <div class="answer" id="base-answer"></div>
+      <div class="metrics hide" id="base-metrics"></div>
+    </div>
+  </div>
+
+  <div id="scorebar" class="hide">
+    <button class="alt" id="scorebtn">Score this live with RAGAS</button>
+    <span class="scope" id="scorenote"></span>
+  </div>
+
+  <div id="ctxwrap" class="hide">
+    <h2>Retrieved context</h2>
+    <div class="sub" id="ctxsummary"></div>
+    <div id="chunks"></div>
+  </div>
+</div>
+
+<div id="view-eval" class="hide">
+  <div id="evalbody">Loading...</div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

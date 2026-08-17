@@ -45,7 +45,8 @@ Question
 │   ├── ingest.py    # Download a 10-K from SEC EDGAR and save it as text
 │   ├── index.py     # Chunk, embed, and store the text in Chroma
 │   ├── query.py     # Answer a question via RAG and via the baseline
-│   └── evaluate.py  # Score both systems over the QA set
+│   ├── evaluate.py  # Score both systems over the QA set
+│   └── app.py       # Web UI comparing the two systems side by side
 ├── data/
 │   └── qa_pairs.json  # QA benchmark (tracked; the filings are gitignored)
 ├── chroma_db/       # Vector store (gitignored, rebuilt by index.py)
@@ -93,6 +94,22 @@ twice. After editing a QA pair, delete that file — the cache is keyed on quest
 ID and would otherwise reuse a stale answer.
 
 `query.py` also runs interactively if you omit the question.
+
+### Comparison UI
+
+```bash
+uvicorn app:app --app-dir src --reload
+```
+
+Then open `http://127.0.0.1:8000`. Pick a benchmark question or type your own, and
+both systems answer side by side with the retrieved passages shown beneath — each
+labelled with the filing it came from, so cross-company retrieval is visible.
+
+RAGAS scores for benchmark questions are read from the frozen evaluation run, so
+they appear instantly and match the reported results. A **Score this live** button
+re-runs RAGAS on a single question on demand; that takes a couple of minutes,
+because faithfulness and context recall each make several judge calls. A second tab
+shows the aggregate results and the scoring coverage.
 
 ## Dataset
 
