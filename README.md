@@ -4,7 +4,7 @@ A Retrieval-Augmented Generation (RAG) pipeline for answering questions about
 company annual reports (SEC 10-K filings), evaluated against a standalone LLM
 baseline that uses the **same generator model** but no retrieval.
 
-> **MSc dissertation (COMP702), University of Liverpool, 2024/25.**
+> **MSc dissertation (COMP702), University of Liverpool, 2025/26.**
 > Supervisor: Dr. Blaine Keetch.
 
 ## Research question
